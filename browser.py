@@ -11,6 +11,16 @@ def entity(acc):
         return "<"
     elif acc == "gt":
         return ">"
+    elif acc == "amp":
+        return "&"
+    elif acc == "ndash":
+        return "-"
+    elif acc == "copy":
+        return "©"
+    elif acc == "quot":
+        return '"'
+    else:
+        return ""
 
 def advance(state, acc, c):
     if state == HTMLParseState.Ok:
@@ -41,18 +51,22 @@ def show(body):
 
 def load(url):
     body = url.request()
-    if url.content_type == "text/html":
+    if url.content_type.startswith("text/html"):
         show(body)
     else:
         print(body)
 
 class URL:
-    def __init__(self, url):
+    def __init__(self, url, redirect_depth = 0):
+        # prevent infinite redirect chains
+        assert(redirect_depth < 5)
+        self.redirect_depth = redirect_depth
+
+        # set default content type
+        self.content_type = "text/html"
+
         # determine scheme - only http, https, file, data, and view-source supported for now
         # if no scheme provided, file is assumed
-
-        # assume html by default
-        self.content_type = "text/html"
 
         # check for view-source scheme
         if url.startswith("view-source:"):
@@ -100,6 +114,8 @@ class URL:
         elif self.scheme == "https":
             self.port = 443
 
+        self.socket = None
+
     def request(self):
         if self.scheme == "data":
             return self.data
@@ -109,28 +125,30 @@ class URL:
                 return f.read()
         
         # Create socket
-        s = socket.socket(
-            family = socket.AF_INET,
-            type = socket.SOCK_STREAM,
-            proto = socket.IPPROTO_TCP,
-        )
-        s.connect((self.host, self.port))
+        if self.socket is None:
+            self.socket = socket.socket(
+                family = socket.AF_INET,
+                type = socket.SOCK_STREAM,
+                proto = socket.IPPROTO_TCP,
+            )
 
-        # wrap socket with SSL encryption if using https
-        if self.scheme == "https":
-            ctx = ssl.create_default_context()
-            s = ctx.wrap_socket(s, server_hostname = self.host)
+            self.socket.connect((self.host, self.port))
+            
+            # wrap socket with SSL encryption if using https
+            if self.scheme == "https":
+                ctx = ssl.create_default_context()
+                self.socket = ctx.wrap_socket(self.socket, server_hostname = self.host)
 
         # send HTTP get request
         request = f"GET {self.path} HTTP/1.1\r\n"
         request += f"Host: {self.host}\r\n"
-        request += "Connection: close\r\n"
         request += "User-Agent: archermarx\r\n"
+        request += "Connection: Keep-Alive\r\n"
         request += "\r\n"
-        s.send(request.encode("utf8"))
+        self.socket.send(request.encode("utf8"))            
         
         # Record the response
-        response = s.makefile("r", encoding="utf8", newline = "\r\n")
+        response = self.socket.makefile("r", encoding="utf8", newline = "\r\n")
 
         # Parse the response
         statusline = response.readline()
@@ -146,8 +164,19 @@ class URL:
             assert "transfer-encoding" not in response_headers
             assert "content-encoding" not in response_headers
 
-        content = response.read()
-        s.close()
+        # check for redirect
+        if 300 <= int(status) < 400:
+            location = response_headers["location"]
+            if location.startswith("/"):
+                location = self.scheme + "://" + self.host + location
+
+            print(f"Redirecting to {location} (depth = {self.redirect_depth})")
+            redirect = URL(location, self.redirect_depth + 1)
+            return redirect.request()
+
+        self.content_type = response_headers["content-type"]
+        content_length = int(response_headers["content-length"])
+        content = response.read(content_length)
 
         return content
 
