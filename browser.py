@@ -33,7 +33,6 @@ def advance(state, acc, c):
 
     return state, acc
 
-
 def show(body):
     state = HTMLParseState.Ok
     acc = ""
@@ -42,24 +41,47 @@ def show(body):
 
 def load(url):
     body = url.request()
-    show(body)
+    if url.content_type == "text/html":
+        show(body)
+    else:
+        print(body)
 
 class URL:
     def __init__(self, url):
-        # determine scheme - only http, https, and file supported for now
-        # if no scheme header, file is assumed
+        # determine scheme - only http, https, file, data, and view-source supported for now
+        # if no scheme provided, file is assumed
+
+        # assume html by default
+        self.content_type = "text/html"
+
+        # check for view-source scheme
+        if url.startswith("view-source:"):
+            self.content_type = "text/plain;charset=utf8"
+            url = url[12:]
+
         if "://" in url:
             self.scheme, url = url.split("://", 1)
-        else:
-            self.scheme, url = "file", url
+            assert self.scheme in ["http", "https", "file"]
+        elif ":" in url:
+            self.scheme, url = url.split(":", 1)
+            assert self.scheme == "data"
+        else:   
+            self.scheme = "file"
 
-        assert self.scheme in ["http", "https", "file"]
-
+        # handle file scheme
         if self.scheme == "file":
             self.path = url
-            self.host = ""
-            self.port = 0
+            if "." in self.path:
+                _, ext = self.path.split(".", 1)
+                if ext != "html":
+                    self.content_type = "text/plain;charset=utf8"
             return
+        
+        if self.scheme == "data":
+            assert "," in url
+            self.content_type, self.data = url.split(",", 1)
+            if self.content_type == "":
+                self.content_type = "text/plain;charset=US-ASCII"
 
         # separate host from path
         if "/" not in url:
@@ -79,11 +101,12 @@ class URL:
             self.port = 443
 
     def request(self):
-        # read file if needed
+        if self.scheme == "data":
+            return self.data
+
         if self.scheme == "file":
             with open(self.path) as f:
-                s = f.read();
-            return s
+                return f.read()
         
         # Create socket
         s = socket.socket(
