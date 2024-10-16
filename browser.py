@@ -17,9 +17,20 @@ def load(url):
 
 class URL:
     def __init__(self, url):
-        # determine scheme - only http and https supported for now
-        self.scheme, url = url.split("://", 1)
-        assert self.scheme in ["http", "https"]
+        # determine scheme - only http, https, and file supported for now
+        # if no scheme header, file is assumed
+        if "://" in url:
+            self.scheme, url = url.split("://", 1)
+        else:
+            self.scheme, url = "file", url
+
+        assert self.scheme in ["http", "https", "file"]
+
+        if self.scheme == "file":
+            self.path = url
+            self.host = ""
+            self.port = 0
+            return
 
         # separate host from path
         if "/" not in url:
@@ -38,8 +49,13 @@ class URL:
         elif self.scheme == "https":
             self.port = 443
 
-
     def request(self):
+        # read file if needed
+        if self.scheme == "file":
+            with open(self.path) as f:
+                s = f.read();
+            return s
+        
         # Create socket
         s = socket.socket(
             family = socket.AF_INET,
@@ -80,7 +96,6 @@ class URL:
         s.close()
 
         return content
-
 
 if __name__ == "__main__":
     import sys
