@@ -21,18 +21,23 @@ class URL:
         self.scheme, url = url.split("://", 1)
         assert self.scheme in ["http", "https"]
 
-        # determine which port we're using
-        if self.scheme == "http":
-            self.port = 80
-        elif self.scheme == "https":
-            self.port = 443
-
         # separate host from path
         if "/" not in url:
             url = url + "/"
 
         self.host, url = url.split("/", 1)
-        self.path = "/" + url
+        self.path = "/" + url 
+
+        # determine which port we're using
+        if ":" in self.host:
+            # custom port present
+            self.host, port = url.split(":", 1)
+            self.port = int(port)
+        elif self.scheme == "http":
+            self.port = 80
+        elif self.scheme == "https":
+            self.port = 443
+
 
     def request(self):
         # Create socket
@@ -71,10 +76,10 @@ class URL:
             assert "transfer-encoding" not in response_headers
             assert "content-encoding" not in response_headers
 
-            content = response.read()
-            s.close()
+        content = response.read()
+        s.close()
 
-            return content
+        return content
 
 
 if __name__ == "__main__":
