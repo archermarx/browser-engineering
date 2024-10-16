@@ -122,8 +122,10 @@ class URL:
             s = ctx.wrap_socket(s, server_hostname = self.host)
 
         # send HTTP get request
-        request = f"GET {self.path} HTTP/1.0\r\n"
+        request = f"GET {self.path} HTTP/1.1\r\n"
         request += f"Host: {self.host}\r\n"
+        request += "Connection: close\r\n"
+        request += "User-Agent: archermarx\r\n"
         request += "\r\n"
         s.send(request.encode("utf8"))
         
