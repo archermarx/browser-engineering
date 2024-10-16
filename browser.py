@@ -1,6 +1,9 @@
 import socket
 import ssl
+import time
 from enum import Enum
+from typing import Dict, Tuple
+import gzip
 
 HTMLParseState = Enum('HTMLParseState', [
     'Ok', "InTag", "InEntity"
@@ -50,14 +53,43 @@ def show(body):
         state, acc = advance(state, acc, c)
 
 def load(url):
-    body = url.request()
+    body, _, _ = url.request()
     if url.content_type.startswith("text/html"):
         show(body)
     else:
         print(body)
 
+response_cache: Dict[str, Tuple[float, float, str]] = {}
+
+# Chunked-Body   = *chunk
+#                 last-chunk
+#                 trailer
+#                 CRLF
+
+# chunk          = chunk-size [ chunk-extension ] CRLF
+#                 chunk-data CRLF
+# chunk-size     = 1*HEX
+# last-chunk     = 1*("0") [ chunk-extension ] CRLF
+
+# chunk-extension= *( ";" chunk-ext-name [ "=" chunk-ext-val ] )
+# chunk-ext-name = token
+# chunk-ext-val  = token | quoted-string
+# chunk-data     = chunk-size(OCTET)
+# trailer        = *(entity-header CRLF)
+def read_chunk(f):
+    chunk = b""
+    chunk_size = f.readline()
+    chunk_size = int(chunk_size[:-2], 16)
+    if chunk_size > 0:
+        chunk += f.read(chunk_size)
+        f.readline()
+    return chunk
+
 class URL:
     def __init__(self, url, redirect_depth = 0):
+        # store initial url to use a as a key for cache lookups
+        self.url = url
+
         # prevent infinite redirect chains
         assert(redirect_depth < 5)
         self.redirect_depth = redirect_depth
@@ -123,65 +155,128 @@ class URL:
         if self.scheme == "file":
             with open(self.path) as f:
                 return f.read()
-        
-        # Create socket
-        if self.socket is None:
-            self.socket = socket.socket(
-                family = socket.AF_INET,
-                type = socket.SOCK_STREAM,
-                proto = socket.IPPROTO_TCP,
-            )
 
-            self.socket.connect((self.host, self.port))
+        current_time = time.time()
             
-            # wrap socket with SSL encryption if using https
-            if self.scheme == "https":
-                ctx = ssl.create_default_context()
-                self.socket = ctx.wrap_socket(self.socket, server_hostname = self.host)
+        if self.url in response_cache:
+            # use cached response if page not too old
+            content = response_cache[self.url]
+            timestamp, max_age, content = response_cache[self.url]
+            age = current_time - timestamp
+            if (max_age < 0) or (age < max_age):
+                return content, True, max_age
+      
+        #  Create socket
+        self.socket = socket.socket(
+            family = socket.AF_INET,
+            type = socket.SOCK_STREAM,
+            proto = socket.IPPROTO_TCP,
+        )
 
-        # send HTTP get request
+        self.socket.connect((self.host, self.port))
+        
+        # wrap socket with SSL encryption if using https
+        if self.scheme == "https":
+            ctx = ssl.create_default_context()
+            self.socket = ctx.wrap_socket(self.socket, server_hostname = self.host)
+
+        # send HTTP GET request
         request = f"GET {self.path} HTTP/1.1\r\n"
         request += f"Host: {self.host}\r\n"
         request += "User-Agent: archermarx\r\n"
-        request += "Connection: Keep-Alive\r\n"
+        request += "Connection: close\r\n"
+        request += "Accept-Encoding: gzip\r\n"
         request += "\r\n"
         self.socket.send(request.encode("utf8"))            
         
-        # Record the response
-        response = self.socket.makefile("r", encoding="utf8", newline = "\r\n")
+        response = self.socket.makefile("rb", newline = "\r\n")
 
         # Parse the response
-        statusline = response.readline()
+        statusline = response.readline().decode("utf8")
         version, status, explanation = statusline.split(" ", 2)
+        status = int(status)
+
         response_headers = {}
         while True:
-            line = response.readline()
+            line = response.readline().decode("utf8")
             if line == "\r\n": 
                 break
             header, value = line.split(":", 1)
             response_headers[header.casefold()] = value.strip()
+
+        max_age = -1.0
+        cache = True
+
+        if "cache-control" in response_headers:
+            options = response_headers["cache-control"].split(",")
+            for opt in options:
+                opt = opt.strip()
+                if opt == "no-store":
+                    cache = False
+                elif opt.startswith("max-age"):
+                    _, val = opt.split("=", 1)
+                    max_age = float(val)
+                else:
+                    # don't cache if other options provided
+                    cache = False
             
-            assert "transfer-encoding" not in response_headers
-            assert "content-encoding" not in response_headers
+        # don't bother caching pages with very short max ages
+        if max_age < 1.0:
+            cache = False
 
         # check for redirect
-        if 300 <= int(status) < 400:
+        if 300 <= status < 400:
             location = response_headers["location"]
             if location.startswith("/"):
                 location = self.scheme + "://" + self.host + location
 
             print(f"Redirecting to {location} (depth = {self.redirect_depth})")
             redirect = URL(location, self.redirect_depth + 1)
+            # todo: cache redirects without caching whole page
             return redirect.request()
 
         self.content_type = response_headers["content-type"]
-        content_length = int(response_headers["content-length"])
-        content = response.read(content_length)
 
-        return content
+        chunked = False
+        compressed = False
+
+        if "transfer-encoding" in response_headers:
+            transfer_encoding_opts = [s.strip() for s in response_headers["transfer-encoding"].split(",")]
+            chunked = "chunked" in transfer_encoding_opts
+            compressed = "gzip" in transfer_encoding_opts
+
+        if "content-encoding" in response_headers:
+            content_encoding_opts = [s.strip() for s in response_headers["content-encoding"].split(",")]
+            compressed = "gzip" in content_encoding_opts
+
+        # read content in chunks if requested
+        if chunked:
+            content = b""
+            while True:
+                chunk = read_chunk(response)
+                if not chunk:
+                    break
+                content += chunk
+
+        else:
+            bytes_to_read = int(response_headers["content-length"])
+            content = response.read(bytes_to_read)
+
+        # decompress content if needed
+        if compressed:
+            content = gzip.decompress(content)
+            print("decompressing")
+
+        content = content.decode("utf-8")
+
+        # cache content
+        if cache and (status == 200 or status == 404):
+            response_cache[self.url] = (current_time, max_age, content)
+
+        self.socket.close()
+
+        return content, cache, max_age
 
 if __name__ == "__main__":
     import sys
     load(URL(sys.argv[1]))
-
-
