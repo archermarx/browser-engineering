@@ -13,7 +13,7 @@ import (
 )
 
 type Url struct {
-	scheme, host, path, port string
+	scheme, host, path, port, content_type string
 }
 
 func split1(s string, dlm string) (string, string) {
@@ -24,10 +24,15 @@ func split1(s string, dlm string) (string, string) {
 	return s[:ind], s[ind+len(dlm):]
 }
 
-func newUrl(url string) Url {
+func getExt(path string) string {
+	_, ext := split1(path, ".")
+	return ext
+}
+
+func newUrlWithContentType(url string, content_type string) Url {
 	scheme, url := split1(url, ":")
 	doubleslash_schemes := []string{"http", "https", "file"}
-	supported_schemes := []string{"http", "https", "file", "data"}
+	supported_schemes := []string{"http", "https", "file", "data", "view-source"}
 
 	if !slices.Contains(supported_schemes, scheme) {
 		panic(fmt.Errorf("unsupported scheme %s. Supported schemes are %v", scheme, supported_schemes))
@@ -43,12 +48,19 @@ func newUrl(url string) Url {
 	}
 
 	if scheme == "file" {
-		return Url{scheme: scheme, host: "", path: url, port: "0"}
+		if getExt(url) != "html" {
+			content_type = "text/ascii"
+		}
+		return Url{scheme: scheme, host: "", path: url, port: "0", content_type: content_type}
 	}
 
 	if scheme == "data" {
 		content_type, content := split1(url, ",")
-		return Url{scheme: scheme, host: content_type, path: content, port: "0"}
+		return Url{scheme: scheme, host: "", path: content, port: "0", content_type: content_type}
+	}
+
+	if scheme == "view-source" {
+		return newUrlWithContentType(url, "text/ascii")
 	}
 
 	host, path := split1(url, "/")
@@ -70,7 +82,11 @@ func newUrl(url string) Url {
 		}
 	}
 
-	return Url{scheme: scheme, host: host, path: path, port: port}
+	return Url{scheme: scheme, host: host, path: path, port: port, content_type: content_type}
+}
+
+func newUrl(url string) Url {
+	return newUrlWithContentType(url, "text/html")
 }
 
 type HtmlParseState int
@@ -97,7 +113,11 @@ func getEntity(acc string) string {
 	return "&" + acc + ";"
 }
 
-func show(body string) {
+func show(body string, contentType string) {
+	if contentType != "text/html" {
+		fmt.Print(body)
+		return
+	}
 	state := InTag
 	acc := ""
 	for _, c := range body {
@@ -215,5 +235,5 @@ func main() {
 
 	response, err := request(url)
 	check(err)
-	show(string(response))
+	show(string(response), url.content_type)
 }
