@@ -83,8 +83,10 @@ func request(url Url) ([]byte, error) {
 	}
 
 	// send HTTP get request
-	req := fmt.Sprintf("GET %s HTTP/1.0\r\n", url.path)
+	req := fmt.Sprintf("GET %s HTTP/1.1\r\n", url.path)
 	req += fmt.Sprintf("Host: %s\r\n", url.host)
+	req += "Connection: close\r\n"
+	req += "User-Agent: archermarx-browser\r\n"
 	req += "\r\n"
 	fmt.Fprint(conn, req)
 
