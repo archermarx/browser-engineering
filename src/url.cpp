@@ -7,6 +7,8 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <iostream>
+#include <sstream>
+#include <unordered_map>
 
 #include "url.h"
 
@@ -86,7 +88,7 @@ void request (URL url) {
         , url.path, url.host);
 
     // send request
-    auto bytes_sent = send(sockfd, req.c_str(), req.length(), 0);
+    send(sockfd, req.c_str(), req.length(), 0);
     
     // get response
     constexpr size_t chunksize = 1024;
@@ -99,9 +101,34 @@ void request (URL url) {
         response += std::string(buf).substr(0, bytes_received);
     } while (bytes_received > 0);
 
+    
+    // read status line
+    std::istringstream stream(response);
+    string statusline;
+    getline(stream, statusline);
+    statusline.erase(
+        std::remove(statusline.begin(), statusline.end(), '\r'), statusline.end()
+    );
+    
+    auto [version, remainder] = split(statusline, " ");
+    auto [status_str, ok] = split(remainder, " "); 
+    auto status = stod(status_str);
 
+    // parse headers
+    std::unordered_map<string, string> response_headers;
+    string s;
+    while (getline(stream, s)) {
+        // remove carriage returns
+        s.erase(std::remove(s.begin(), s.end(), '\r' ), s.end());
+        if (s == "") break;
 
+        auto [key, value] = split(s, ": ");
+        response_headers[key] = value;
+    }
 
+    string remaining(stream.str().substr(stream.tellg()));
+
+    std::cout << remaining << std::endl;
 
     close(sockfd);
 }
