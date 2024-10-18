@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	str "strings"
 )
@@ -24,7 +25,32 @@ func split1(s string, dlm string) (string, string) {
 }
 
 func newUrl(url string) Url {
-	scheme, url := split1(url, "://")
+	scheme, url := split1(url, ":")
+	doubleslash_schemes := []string{"http", "https", "file"}
+	supported_schemes := []string{"http", "https", "file", "data"}
+
+	if !slices.Contains(supported_schemes, scheme) {
+		panic(fmt.Errorf("unsupported scheme %s. Supported schemes are %v", scheme, supported_schemes))
+	}
+
+	// check for and remove "//" at beginning of http, file, etc
+	if slices.Contains(doubleslash_schemes, scheme) {
+		if str.HasPrefix(url, "//") {
+			url = str.TrimPrefix(url, "//")
+		} else {
+			panic(fmt.Errorf("malformed uri: %s, expected leading //", url))
+		}
+	}
+
+	if scheme == "file" {
+		return Url{scheme: scheme, host: "", path: url, port: "0"}
+	}
+
+	if scheme == "data" {
+		content_type, content := split1(url, ",")
+		return Url{scheme: scheme, host: content_type, path: content, port: "0"}
+	}
+
 	host, path := split1(url, "/")
 	if !str.HasPrefix(path, "/") {
 		path = "/" + path
@@ -32,10 +58,6 @@ func newUrl(url string) Url {
 
 	// check for port
 	host, port := split1(host, ":")
-
-	if scheme != "http" && scheme != "https" {
-		panic("only http or https supported")
-	}
 
 	if len(port) == 0 {
 		switch scheme {
@@ -48,8 +70,7 @@ func newUrl(url string) Url {
 		}
 	}
 
-	u := Url{scheme: scheme, host: host, path: path, port: port}
-	return u
+	return Url{scheme: scheme, host: host, path: path, port: port}
 }
 
 func show(body string) {
@@ -67,6 +88,16 @@ func show(body string) {
 }
 
 func request(url Url) ([]byte, error) {
+
+	fmt.Printf("%+v\n", url)
+
+	if url.scheme == "file" {
+		return os.ReadFile(url.path)
+	}
+
+	if url.scheme == "data" {
+		return []byte(url.path), nil
+	}
 
 	address := url.host + ":" + url.port
 
@@ -123,6 +154,12 @@ func request(url Url) ([]byte, error) {
 	return io.ReadAll(response_reader)
 }
 
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
+
 func main() {
 	var input string
 	if len(os.Args) == 1 {
@@ -137,6 +174,7 @@ func main() {
 		url.port = os.Args[2]
 	}
 
-	response, _ := request(url)
+	response, err := request(url)
+	check(err)
 	show(string(response))
 }
