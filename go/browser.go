@@ -73,18 +73,57 @@ func newUrl(url string) Url {
 	return Url{scheme: scheme, host: host, path: path, port: port}
 }
 
+type HtmlParseState int
+
+const (
+	None HtmlParseState = iota
+	InTag
+	InEntity
+)
+
+func getEntity(acc string) string {
+	switch acc {
+	case "amp":
+		return "&"
+	case "lt":
+		return "<"
+	case "gt":
+		return ">"
+	case "copy":
+		return "©"
+	case "ndash":
+		return "-"
+	}
+	return "&" + acc + ";"
+}
+
 func show(body string) {
-	in_tag := false
+	state := InTag
+	acc := ""
 	for _, c := range body {
-		if c == '<' {
-			in_tag = true
-		} else if c == '>' {
-			in_tag = false
-		} else if !in_tag {
-			fmt.Printf("%c", c)
+		switch state {
+		case None:
+			if c == '<' {
+				state = InTag
+			} else if c == '&' {
+				state = InEntity
+				acc = ""
+			} else {
+				fmt.Printf("%c", c)
+			}
+		case InTag:
+			if c == '>' {
+				state = None
+			}
+		case InEntity:
+			if c == ';' {
+				state = None
+				fmt.Printf("%s", getEntity(acc))
+			} else {
+				acc += string(c)
+			}
 		}
 	}
-	fmt.Println()
 }
 
 func request(url Url) ([]byte, error) {
