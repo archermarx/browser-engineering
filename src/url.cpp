@@ -1,6 +1,12 @@
 #include <utility>
 #include <fmt/core.h>
 #include <cassert>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <iostream>
 
 #include "url.h"
 
@@ -48,11 +54,54 @@ URL::URL (const string &url) {
     }
 
     // Get host and path
-    [this->host, this->path] = split(rest, "/");
-    path = "/" + path;
+    auto [hostname, pathname] = split(rest, "/");
+    this->host = hostname;
+    this->path = "/" + pathname;
+}
 
-    fmt::println("scheme = {}, host = {}, path = {}", scheme_name(scheme), host, path);
-    
+void request (URL url) {
+    const char* port = "80";
 
+    // Create address structs
+    addrinfo hints, *res;
+    int sockfd;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    getaddrinfo(url.host.c_str(), port, &hints, &res);
     
+    // Make a socket
+    sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+
+    // connect!
+    connect(sockfd, res->ai_addr, res->ai_addrlen);
+
+    // create HTTP GET request
+    auto req = fmt::format(
+        "GET {} HTTP/1.0\r\n"
+        "Host: {}\r\n"
+        "\r\n"
+        , url.path, url.host);
+
+    // send request
+    auto bytes_sent = send(sockfd, req.c_str(), req.length(), 0);
+    
+    // get response
+    constexpr size_t chunksize = 1024;
+    char buf[chunksize];
+
+    std::string response = "";
+    int bytes_received;
+    do {
+        bytes_received = recv(sockfd, buf, chunksize, 0);
+        response += std::string(buf).substr(0, bytes_received);
+    } while (bytes_received > 0);
+
+
+
+
+
+    close(sockfd);
 }

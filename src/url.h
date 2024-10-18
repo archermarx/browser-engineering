@@ -20,10 +20,11 @@ std::string scheme_name (uri_scheme scheme);
 uri_scheme get_scheme (const std::string &scheme_str);
 
 struct URL {
-    public:
-        uri_scheme scheme;
-        std::string host;
-        std::string path;
+    uri_scheme scheme;
+    std::string host;
+    std::string path;
 
-        URL (const std::string &url); 
+    URL (const std::string &url); 
 };
+
+void request (URL url);

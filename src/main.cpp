@@ -10,5 +10,9 @@ int main (int argc, char** argv) {
     }
     auto url = URL(url_str);
 
-    fmt::println("scheme = {}", scheme_name(url.scheme));
+    fmt::println(
+        "scheme = {}, host = {}, path = {}",
+        scheme_name(url.scheme), url.host, url.path);
+
+    request(url);
 }
