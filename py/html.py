@@ -25,6 +25,8 @@ def entity(buf):
         return "©"
     elif buf == "quot":
         return '"'
+    elif buf == "shy":
+        return "\N{soft hyphen}"
     else:
         return ""
 

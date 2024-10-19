@@ -71,7 +71,6 @@ class Browser:
             0, 0, self.canvas.width, ADDRESSBAR_HEIGHT, fill = "white"
         )
         self.canvas.create_text(HSTEP, VSTEP/4, text = self.current_url, anchor = "nw")
-        
 
     def draw_scrollbar(self):
         halfwidth = 0.5 * SCROLLBAR_WIDTH

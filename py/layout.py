@@ -7,10 +7,13 @@ from constants import *
 
 FONTS = {}
 
-def get_font(size, weight, style):
-    key = (size, weight, style)
+def get_font(family, size, weight, style):
+    key = (family, size, weight, style)
     if key not in FONTS:
-        font = tkinter.font.Font(size = size, weight = weight, slant = style)
+        font = tkinter.font.Font(
+            family = family,
+            size = size, weight = weight, slant = style
+        )
         label = tkinter.Label(font=font)
         FONTS[key] = (font, label)
     return FONTS[key][0]
@@ -20,9 +23,13 @@ class Layout:
         self.cursor_x = HSTEP
         self.cursor_y = VSTEP + ADDRESSBAR_HEIGHT
         self.width = width
+        self.center = False
+        self.superscript = False
+        self.pre = False
         self.size = 16
         self.weight = "normal"
         self.style = "roman"
+        self.family = "Times"
         self.line = []
         self.display_list = []
 
@@ -33,8 +40,15 @@ class Layout:
 
     def token(self, tok):
         if isinstance(tok, Text):
-            for word in tok.text.split():
-                self.word(word)
+            if (self.pre):
+                lines = tok.text.split("\n")
+                for line in lines:
+                    self.word(line)
+                    self.flush()
+            else:
+                for word in tok.text.split():
+                    self.word(word)
+
         elif tok.tag == "i":
             self.style = "italic"
         elif tok.tag == "/i":
@@ -56,9 +70,27 @@ class Layout:
         elif tok.tag == "/p":
             self.flush()
             self.cursor_y += VSTEP
+        elif tok.tag == 'h1 class="title"':
+            self.center = True
+        elif tok.tag == "/h1":
+            self.flush()
+            self.center = False
+        elif tok.tag == "sup":
+            self.size = int(self.size/2)
+            self.superscript = True
+        elif tok.tag == "/sup":
+            self.size *= 2
+            self.superscript = False
+        elif tok.tag.startswith("pre"):
+            self.pre = True
+            self.family = "Courier New"
+        elif tok.tag == "/pre":
+            self.pre = False
+            self.family = "Times"
+            self.flush()
 
     def word(self, word):
-        font =  get_font(self.size, self.weight, self.style)
+        font = get_font(self.family, self.size, self.weight, self.style)
         w = font.measure(word)
         if self.cursor_x + w > self.width - HSTEP:
             self.flush()
@@ -72,9 +104,14 @@ class Layout:
         max_ascent = max([metric["ascent"] for metric in metrics])
         baseline = self.cursor_y + 1.25 * max_ascent
 
+        if self.center:
+            x_offset = (self.width - self.cursor_x)/2
+        else:
+            x_offset = 0
+
         for x, word, font in self.line:
             y = baseline - font.metrics("ascent")
-            self.display_list.append((x, y, word, font))
+            self.display_list.append((x + x_offset, y, word, font))
 
         max_descent = max([metric["descent"] for metric in metrics])
         self.cursor_y = baseline + 1.25 * max_descent
