@@ -1,6 +1,7 @@
 import tkinter
+import tkinter.font
 from url import URL
-from html import lex
+from html import lex, Text, Tag, print_tokens
 import platform
 import os
 
@@ -11,6 +12,46 @@ HSTEP, VSTEP = 13, 18
 ADDRESSBAR_HEIGHT = 1.25 * VSTEP
 SCROLLBAR_WIDTH = HSTEP
 SCROLLBAR_OFFSET = 5
+
+class Layout:
+    def __init__(self, tokens, width):
+        self.cursor_x = HSTEP
+        self.cursor_y = VSTEP + ADDRESSBAR_HEIGHT
+        self.width = width
+        self.weight = "normal"
+        self.style = "roman"
+        self.display_list = []
+
+        for tok in tokens:
+            self.token(tok)
+
+    def token(self, tok):
+        if isinstance(tok, Text):
+            for word in tok.text.split():
+                self.word(word)
+        elif tok.tag == "i":
+            style = "italic"
+        elif tok.tag == "/i":
+            style = "roman"
+        elif tok.tag == "b":
+            weight = "bold"
+        elif tok.tag == "/b":
+            weight = "normal"
+
+    def word(self, word):
+        font = tkinter.font.Font(
+            size=16,
+            weight=self.weight,
+            slant=self.style,
+        )
+        w = font.measure(word)
+        h = font.metrics("linespace") * 1.25
+        if self.cursor_x + w > self.width - HSTEP:
+            self.cursor_y += h
+            self.cursor_x = HSTEP
+        self.display_list.append((self.cursor_x, self.cursor_y, word, font))
+        self.cursor_x += w + font.measure(" ")
+
 
 class Browser:
     def __init__(self):
@@ -24,16 +65,22 @@ class Browser:
         self.canvas.height = HEIGHT
         self.canvas.pack(fill = tkinter.BOTH, expand = 1)
         self.scroll = 0
+        self.max_scroll = 0
+        self.bottom_margin = 5*VSTEP
         self.window.bind("<Down>", self.scrolldown)
         self.window.bind("<Up>", self.scrollup)
         self.window.bind("<Configure>", self.resize)
         self.detect_platform()
         self.current_url = "about:blank"
 
+    def update_layout(self):
+        screen_width = self.canvas.width - HSTEP - SCROLLBAR_WIDTH - SCROLLBAR_OFFSET
+        self.display_list = Layout(self.tokens, screen_width).display_list
+
     def resize(self, e):
         self.canvas.width = e.width
         self.canvas.height = e.height
-        self.layout()
+        self.update_layout()
         self.draw()
 
     def detect_platform(self):
@@ -64,22 +111,6 @@ class Browser:
     def scrollwheel(self, e):
         self.scroll += self.scroll_speed * e.delta 
         self.draw()
-
-    def layout(self):
-        self.display_list = []
-        cursor_x, cursor_y = HSTEP, VSTEP + ADDRESSBAR_HEIGHT
-        self.max_scroll = VSTEP
-
-        screen_width = self.canvas.width - HSTEP - SCROLLBAR_WIDTH - SCROLLBAR_OFFSET
-
-        for c in self.text:
-            cursor_x += HSTEP
-            if cursor_x >= screen_width or c == '\n':
-                cursor_y += VSTEP
-                cursor_x = HSTEP
-
-            self.display_list.append((cursor_x, cursor_y, c))
-            self.max_scroll = max(cursor_y + VSTEP - self.canvas.height, self.max_scroll)
 
     def draw_addressbar(self):
         self.canvas.create_rectangle(
@@ -113,10 +144,18 @@ class Browser:
         self.scroll = min(max(0, self.scroll), self.max_scroll)
         self.canvas.delete("all")
 
-        for (x, y, c) in self.display_list: 
+        self.max_scroll = VSTEP
+
+        for (x, y, word, font) in self.display_list:
+            self.max_scroll = max(y + self.bottom_margin - self.canvas.height, self.max_scroll)
+
+        for (x, y, word, font) in self.display_list: 
             if y > self.scroll + self.canvas.height: continue
             if y + VSTEP < self.scroll: continue
-            self.canvas.create_text(x, y - self.scroll, text=c)
+            self.canvas.create_text(
+                x, y - self.scroll, 
+                text=word, font = font, anchor = "nw"
+            )
 
         self.draw_scrollbar()
         self.draw_addressbar()
@@ -124,11 +163,13 @@ class Browser:
     def load(self, path):
         url = URL(path)
         self.current_url = url.url
-        self.text, _, _ = url.request()
+        text, _, _ = url.request()
         if url.content_type.startswith("text/html"):
-            self.text = lex(self.text)
+            self.tokens = lex(text)
+        else:
+            self.tokens = [Text(text)]
 
-        self.layout()
+        self.update_layout()
         self.draw()
 
 if __name__ == "__main__":
