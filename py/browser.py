@@ -61,7 +61,7 @@ class Layout:
             self.size -= 4
         elif tok.tag == "br" or tok.tag == "/br":
             self.flush()
-        elif tok.tag == "/p"
+        elif tok.tag == "/p":
             self.flush()
             self.cursor_y += VSTEP
 
