@@ -18,6 +18,7 @@ class Layout:
         self.cursor_x = HSTEP
         self.cursor_y = VSTEP + ADDRESSBAR_HEIGHT
         self.width = width
+        self.size = 16
         self.weight = "normal"
         self.style = "roman"
         self.display_list = []
@@ -30,17 +31,25 @@ class Layout:
             for word in tok.text.split():
                 self.word(word)
         elif tok.tag == "i":
-            style = "italic"
+            self.style = "italic"
         elif tok.tag == "/i":
-            style = "roman"
+            self.style = "roman"
         elif tok.tag == "b":
-            weight = "bold"
+            self.weight = "bold"
         elif tok.tag == "/b":
-            weight = "normal"
+            self.weight = "normal"
+        elif tok.tag == "small":
+            self.size -= 2
+        elif tok.tag == "/small":
+            self.size += 2
+        elif tok.tag == "big":
+            self.size += 4
+        elif tok.tag == "/big":
+            self.size -= 4
 
     def word(self, word):
         font = tkinter.font.Font(
-            size=16,
+            size=self.size,
             weight=self.weight,
             slant=self.style,
         )
