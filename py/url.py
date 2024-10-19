@@ -6,12 +6,17 @@ import gzip
 
 response_cache: Dict[str, Tuple[float, float, str]] = {}
 class URL:
+    
+    def url_check(self, cond):
+        if not cond:
+            self.malformed = True
+
     def __init__(self, url, redirect_depth = 0):
         # store initial url to use a as a key for cache lookups
         self.url = url
+        self.malformed = False
 
         # prevent infinite redirect chains
-        assert(redirect_depth < 5)
         self.redirect_depth = redirect_depth
 
         # set default content type
@@ -27,10 +32,10 @@ class URL:
 
         if "://" in url:
             self.scheme, url = url.split("://", 1)
-            assert self.scheme in ["http", "https", "file"]
+            self.url_check(self.scheme in ["http", "https", "file"])
         elif ":" in url:
             self.scheme, url = url.split(":", 1)
-            assert self.scheme == "data"
+            self.url_check(self.scheme == "data")
         else:   
             self.scheme = "file"
 
@@ -44,10 +49,14 @@ class URL:
             return
         
         if self.scheme == "data":
-            assert "," in url
+            self.url_check("," in url)
             self.content_type, self.data = url.split(",", 1)
             if self.content_type == "":
                 self.content_type = "text/plain;charset=US-ASCII"
+
+        if self.malformed:
+            self.url = "about:blank"
+            return;
 
         # separate host from path
         if "/" not in url:
@@ -69,12 +78,15 @@ class URL:
         self.socket = None
 
     def request(self):
+        if self.malformed:
+            return "", None, None
+
         if self.scheme == "data":
-            return self.data
+            return self.data, None, None
 
         if self.scheme == "file":
             with open(self.path) as f:
-                return f.read()
+                return f.read(), None, None
 
         current_time = time.time()
             
@@ -93,7 +105,10 @@ class URL:
             proto = socket.IPPROTO_TCP,
         )
 
-        self.socket.connect((self.host, self.port))
+        try:
+            self.socket.connect((self.host, self.port))
+        except:
+            return "Invalid URL", None, None
         
         # wrap socket with SSL encryption if using https
         if self.scheme == "https":
@@ -145,7 +160,7 @@ class URL:
             cache = False
 
         # check for redirect
-        if 300 <= status < 400:
+        if 300 <= status < 400 and self.redirect_depth < 10:
             location = response_headers["location"]
             if location.startswith("/"):
                 location = self.scheme + "://" + self.host + location

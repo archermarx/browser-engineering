@@ -2,12 +2,14 @@ import tkinter
 from url import URL
 from html import lex
 import platform
+import os
 
 WIDTH, HEIGHT = 800, 600
 SCROLL_STEP = 100
 SCROLL_SPEED = 2
 HSTEP, VSTEP = 13, 18
-SCROLLBAR_WIDTH = 14
+ADDRESSBAR_HEIGHT = 1.25 * VSTEP
+SCROLLBAR_WIDTH = HSTEP
 SCROLLBAR_OFFSET = 5
 
 class Browser:
@@ -26,6 +28,7 @@ class Browser:
         self.window.bind("<Up>", self.scrollup)
         self.window.bind("<Configure>", self.resize)
         self.detect_platform()
+        self.current_url = "about:blank"
 
     def resize(self, e):
         self.canvas.width = e.width
@@ -64,8 +67,8 @@ class Browser:
 
     def layout(self):
         self.display_list = []
-        cursor_x, cursor_y = HSTEP, VSTEP
-        self.max_scroll = 0
+        cursor_x, cursor_y = HSTEP, VSTEP + ADDRESSBAR_HEIGHT
+        self.max_scroll = VSTEP
 
         screen_width = self.canvas.width - HSTEP - SCROLLBAR_WIDTH - SCROLLBAR_OFFSET
 
@@ -78,18 +81,27 @@ class Browser:
             self.display_list.append((cursor_x, cursor_y, c))
             self.max_scroll = max(cursor_y + VSTEP - self.canvas.height, self.max_scroll)
 
+    def draw_addressbar(self):
+        self.canvas.create_rectangle(
+            0, 0, self.canvas.width, ADDRESSBAR_HEIGHT, fill = "white"
+        )
+        self.canvas.create_text(HSTEP, VSTEP/4, text = self.current_url, anchor = "nw")
+        
+
     def draw_scrollbar(self):
         halfwidth = 0.5 * SCROLLBAR_WIDTH
         scrollbar_x = self.canvas.width - halfwidth - SCROLLBAR_OFFSET
-        scrollbar_y = 0
+        scrollbar_y = ADDRESSBAR_HEIGHT
+
+        screen_height = self.canvas.height - ADDRESSBAR_HEIGHT
+        scroll_height = screen_height / self.max_scroll * screen_height
+        scroll_pos = scrollbar_y + self.scroll / self.max_scroll * (screen_height - scroll_height)
+
         self.canvas.create_rectangle(
             scrollbar_x - halfwidth, scrollbar_y,
             scrollbar_x + halfwidth, self.canvas.height,
             fill = "darkgray", outline = "darkgray"
         )
-
-        scroll_height = self.canvas.height / self.max_scroll * self.canvas.height
-        scroll_pos = self.scroll / self.max_scroll * (self.canvas.height - scroll_height)
 
         self.canvas.create_rectangle(
             scrollbar_x - halfwidth, scroll_pos,
@@ -101,14 +113,17 @@ class Browser:
         self.scroll = min(max(0, self.scroll), self.max_scroll)
         self.canvas.delete("all")
 
-        self.draw_scrollbar()
-
         for (x, y, c) in self.display_list: 
             if y > self.scroll + self.canvas.height: continue
             if y + VSTEP < self.scroll: continue
             self.canvas.create_text(x, y - self.scroll, text=c)
 
-    def load(self, url):
+        self.draw_scrollbar()
+        self.draw_addressbar()
+
+    def load(self, path):
+        url = URL(path)
+        self.current_url = url.url
         self.text, _, _ = url.request()
         if url.content_type.startswith("text/html"):
             self.text = lex(self.text)
@@ -123,5 +138,5 @@ if __name__ == "__main__":
     else: 
         url = "http://example.org"
 
-    Browser().load(URL(url))
+    Browser().load(url)
     tkinter.mainloop()
