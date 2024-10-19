@@ -7,7 +7,8 @@ WIDTH, HEIGHT = 800, 600
 SCROLL_STEP = 100
 SCROLL_SPEED = 2
 HSTEP, VSTEP = 13, 18
-
+SCROLLBAR_WIDTH = 14
+SCROLLBAR_OFFSET = 5
 
 class Browser:
     def __init__(self):
@@ -64,18 +65,44 @@ class Browser:
     def layout(self):
         self.display_list = []
         cursor_x, cursor_y = HSTEP, VSTEP
+        self.max_scroll = 0
+
+        screen_width = self.canvas.width - HSTEP - SCROLLBAR_WIDTH - SCROLLBAR_OFFSET
 
         for c in self.text:
             cursor_x += HSTEP
-            if cursor_x >= self.canvas.width - HSTEP or c == '\n':
+            if cursor_x >= screen_width or c == '\n':
                 cursor_y += VSTEP
                 cursor_x = HSTEP
 
             self.display_list.append((cursor_x, cursor_y, c))
+            self.max_scroll = max(cursor_y + VSTEP - self.canvas.height, self.max_scroll)
+
+    def draw_scrollbar(self):
+        halfwidth = 0.5 * SCROLLBAR_WIDTH
+        scrollbar_x = self.canvas.width - halfwidth - SCROLLBAR_OFFSET
+        scrollbar_y = 0
+        self.canvas.create_rectangle(
+            scrollbar_x - halfwidth, scrollbar_y,
+            scrollbar_x + halfwidth, self.canvas.height,
+            fill = "darkgray", outline = "darkgray"
+        )
+
+        scroll_height = self.canvas.height / self.max_scroll * self.canvas.height
+        scroll_pos = self.scroll / self.max_scroll * (self.canvas.height - scroll_height)
+
+        self.canvas.create_rectangle(
+            scrollbar_x - halfwidth, scroll_pos,
+            scrollbar_x + halfwidth, scroll_pos + scroll_height,
+            fill = "lightgray", outline = "lightgray"
+        )
 
     def draw(self):
-        self.scroll = max(0, self.scroll)
+        self.scroll = min(max(0, self.scroll), self.max_scroll)
         self.canvas.delete("all")
+
+        self.draw_scrollbar()
+
         for (x, y, c) in self.display_list: 
             if y > self.scroll + self.canvas.height: continue
             if y + VSTEP < self.scroll: continue
