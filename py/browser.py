@@ -4,7 +4,7 @@ import platform
 import os
 from constants import *
 from url import URL
-from html import lex
+from html import HTMLParser, print_tree
 from layout import Layout
 
 class Browser:
@@ -29,7 +29,7 @@ class Browser:
 
     def update_layout(self):
         screen_width = self.canvas.width - HSTEP - SCROLLBAR_WIDTH - SCROLLBAR_OFFSET
-        self.display_list = Layout(self.tokens, screen_width).display_list
+        self.display_list = Layout(self.tree, screen_width).display_list
 
     def resize(self, e):
         self.canvas.width = e.width
@@ -116,11 +116,12 @@ class Browser:
     def load(self, path):
         url = URL(path)
         self.current_url = url.url
-        text, _, _ = url.request()
+        body, _, _ = url.request()
+
         if url.content_type.startswith("text/html"):
-            self.tokens = lex(text)
+            self.tree = HTMLParser(body).parse()
         else:
-            self.tokens = [Text(text)]
+            self.tree = Text(body)
 
         self.update_layout()
         self.draw()

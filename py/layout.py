@@ -1,7 +1,7 @@
 import tkinter
 import tkinter.font
 
-from html import Text, Tag
+from html import Text, Element
 
 from constants import *
 
@@ -19,13 +19,14 @@ def get_font(family, size, weight, style):
     return FONTS[key][0]
 
 class Layout:
-    def __init__(self, tokens, width):
+    def __init__(self, tree, width):
         self.cursor_x = HSTEP
         self.cursor_y = VSTEP + ADDRESSBAR_HEIGHT
         self.width = width
         self.center = False
         self.superscript = False
         self.pre = False
+        self.smallcaps = False
         self.size = 16
         self.weight = "normal"
         self.style = "roman"
@@ -33,61 +34,61 @@ class Layout:
         self.line = []
         self.display_list = []
 
-        for tok in tokens:
-            self.token(tok)
-
+        self.recurse(tree)
         self.flush()
 
-    def token(self, tok):
-        if isinstance(tok, Text):
+    def open_tag(self, tag):
+        if tag == "i":
+            self.style = "italic"
+        elif tag == "b":
+            self.weight = "bold"
+        elif tag == "small":
+            self.size -= 2
+        elif tag == "big":
+            self.size += 4
+        elif tag == "br":
+            self.flush()
+        elif tag == "h1":
+            self.center = True
+        elif tag == "pre":
+            self.pre = True
+            self.family = "Courier New"
+
+    def close_tag(self, tag):
+        if tag == "i":
+            self.style = "roman"
+        elif tag == "b":
+            self.weight = "normal"
+        elif tag == "small":
+            self.size += 2
+        elif tag == "big":
+            self.size -= 4
+        elif tag == "p":
+            self.flush()
+            self.cursor_y += VSTEP
+        elif tag == "h1":
+            self.flush()
+            self.center = False
+        elif tag == "pre":
+            self.pre = False
+            self.family = "Times"
+            self.flush()
+
+    def recurse(self, tree):
+        if isinstance(tree, Text):
             if (self.pre):
-                lines = tok.text.split("\n")
+                lines = tree.text.split("\n")
                 for line in lines:
                     self.word(line)
                     self.flush()
             else:
-                for word in tok.text.split():
+                for word in tree.text.split():
                     self.word(word)
-
-        elif tok.tag == "i":
-            self.style = "italic"
-        elif tok.tag == "/i":
-            self.style = "roman"
-        elif tok.tag == "b":
-            self.weight = "bold"
-        elif tok.tag == "/b":
-            self.weight = "normal"
-        elif tok.tag == "small":
-            self.size -= 2
-        elif tok.tag == "/small":
-            self.size += 2
-        elif tok.tag == "big":
-            self.size += 4
-        elif tok.tag == "/big":
-            self.size -= 4
-        elif tok.tag == "br" or tok.tag == "/br":
-            self.flush()
-        elif tok.tag == "/p":
-            self.flush()
-            self.cursor_y += VSTEP
-        elif tok.tag == 'h1 class="title"':
-            self.center = True
-        elif tok.tag == "/h1":
-            self.flush()
-            self.center = False
-        elif tok.tag == "sup":
-            self.size = int(self.size/2)
-            self.superscript = True
-        elif tok.tag == "/sup":
-            self.size *= 2
-            self.superscript = False
-        elif tok.tag.startswith("pre"):
-            self.pre = True
-            self.family = "Courier New"
-        elif tok.tag == "/pre":
-            self.pre = False
-            self.family = "Times"
-            self.flush()
+        else:
+            self.open_tag(tree.tag)
+            for child in tree.children:
+                self.recurse(child)
+            self.close_tag(tree.tag)
 
     def word(self, word):
         font = get_font(self.family, self.size, self.weight, self.style)
