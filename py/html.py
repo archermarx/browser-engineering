@@ -57,10 +57,8 @@ class HTMLParser:
         return False
 
     def ends_comment(self):
-        if self.peek() == '-':
-            if self.peek(1) == '-':
-                if self.peek(2) == '>':
-                    return True
+        if self.peek() == '-' and self.peek(1) == '-' and self.peek(2) == '>':
+            return True
         return False
 
     def parse(self):
