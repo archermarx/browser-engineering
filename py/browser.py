@@ -13,6 +13,16 @@ ADDRESSBAR_HEIGHT = 1.25 * VSTEP
 SCROLLBAR_WIDTH = HSTEP
 SCROLLBAR_OFFSET = 5
 
+FONTS = {}
+
+def get_font(size, weight, style):
+    key = (size, weight, style)
+    if key not in FONTS:
+        font = tkinter.font.Font(size = size, weight = weight, slant = style)
+        label = tkinter.Label(font=font)
+        FONTS[key] = (font, label)
+    return FONTS[key][0]
+
 class Layout:
     def __init__(self, tokens, width):
         self.cursor_x = HSTEP
@@ -51,11 +61,7 @@ class Layout:
             self.size -= 4
 
     def word(self, word):
-        font = tkinter.font.Font(
-            size=self.size,
-            weight=self.weight,
-            slant=self.style,
-        )
+        font =  get_font(self.size, self.weight, self.style)
         w = font.measure(word)
         if self.cursor_x + w > self.width - HSTEP:
             self.flush()
