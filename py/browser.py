@@ -1,9 +1,11 @@
 import tkinter
 from url import URL
 from html import lex
+import platform
 
 WIDTH, HEIGHT = 800, 600
 SCROLL_STEP = 100
+SCROLL_SPEED = 2
 HSTEP, VSTEP = 13, 18
 
 def layout(text):
@@ -32,16 +34,37 @@ class Browser:
         self.scroll = 0
         self.window.bind("<Down>", self.scrolldown)
         self.window.bind("<Up>", self.scrollup)
+        self.window.bind("<MouseWheel>", self.scrollwheel)
+
+        self.detect_platform()
+
+    def detect_platform(self):
+        os = platform.system()
+        MAC_SCROLL_DELTA = -1
+        WINDOWS_SCROLL_DELTA = 120
+        self.scroll_speed = 2
+
+        if os == "Darwin":
+            self.scroll_speed = self.scroll_speed / MAC_SCROLL_DELTA
+        elif os == "Windows":
+            self.scroll_speed = self.scroll_speed / WINDOWS_SCROLL_DELTA
+
+
 
     def scrollup(self, e):
-        self.scroll = max(0, self.scroll - SCROLL_STEP)
+        self.scroll = self.scroll - SCROLL_STEP
         self.draw()
 
     def scrolldown(self, e):
         self.scroll += SCROLL_STEP
         self.draw()
 
+    def scrollwheel(self, e):
+        self.scroll += self.scroll_speed * e.delta 
+        self.draw()
+
     def draw(self):
+        self.scroll = max(0, self.scroll)
         self.canvas.delete("all")
         for (x, y, c) in self.display_list: 
             if y > self.scroll + HEIGHT: continue
