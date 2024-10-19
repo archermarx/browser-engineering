@@ -194,7 +194,6 @@ class URL:
         # decompress content if needed
         if compressed:
             content = gzip.decompress(content)
-            print("decompressing")
 
         content = content.decode("utf-8")
 

@@ -20,28 +20,31 @@ def entity(acc):
     else:
         return ""
 
-def advance(state, acc, c):
+def advance(state, text, acc, c):
     if state == HTMLParseState.Ok:
         if c == "<":
             state = HTMLParseState.InTag
         elif c == "&":
             state = HTMLParseState.InEntity
         else:
-            print(c, end = "")
+            text += c
     elif state == HTMLParseState.InTag:
         if c == ">":
             state = HTMLParseState.Ok
     elif state == HTMLParseState.InEntity:
         if c == ";":
             state = HTMLParseState.Ok
-            print(entity(acc), end = "")
+            text += entity(acc)
             acc = ""
         else:
             acc += c
 
-    return state, acc
-def show(body):
+    return state, text, acc
+
+def lex(body):
     state = HTMLParseState.Ok
     acc = ""
+    text = ""
     for c in body:
-        state, acc = advance(state, acc, c)
+        state, text, acc = advance(state, text, acc, c)
+    return text
