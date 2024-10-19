@@ -59,6 +59,11 @@ class Layout:
             self.size += 4
         elif tok.tag == "/big":
             self.size -= 4
+        elif tok.tag == "br" or tok.tag == "/br":
+            self.flush()
+        elif tok.tag == "/p"
+            self.flush()
+            self.cursor_y += VSTEP
 
     def word(self, word):
         font =  get_font(self.size, self.weight, self.style)
