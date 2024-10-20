@@ -34,9 +34,14 @@ class HTMLParser:
         "link", "meta", "title", "style", "script",
     ]
 
+    FORMAT_TAGS = [
+        "b", "i", "ul"
+    ]
+
     def __init__(self, body):
         self.body = body
         self.unfinished = []
+        self.unfinished_format = []
         self.out = []
         self.pos = 0
 
@@ -135,11 +140,27 @@ class HTMLParser:
         if tag.startswith("!"): return
         self.implicit_tags(tag)
 
+
         if tag.startswith("/"):
             if len(self.unfinished) == 1: return
+            base_tag = tag[1:]
+
+            # Handle incorrectly-nested formatting tags
+            fmt_tag = None
+            if base_tag in self.FORMAT_TAGS and len(self.unfinished_format) > 0:
+                expected = self.unfinished_format[-1].tag
+                if base_tag != expected:
+                    fmt_tag = expected
+                    self.add_tag("/" + fmt_tag)
+
             node = self.unfinished.pop()
             parent = self.unfinished[-1]
             parent.children.append(node)
+
+            if base_tag in self.FORMAT_TAGS and fmt_tag is not None:
+                self.unfinished_format.pop()
+                self.add_tag(fmt_tag)
+
         elif tag in self.SELF_CLOSING_TAGS:
             parent = self.unfinished[-1]
             node = Element(tag, attributes, parent)
@@ -148,6 +169,9 @@ class HTMLParser:
             parent = self.unfinished[-1] if self.unfinished else None
             node = Element(tag, attributes, parent)
             self.unfinished.append(node)
+
+            if tag in self.FORMAT_TAGS:
+                self.unfinished_format.append(node)
 
     def finish(self):
         if not self.unfinished:
