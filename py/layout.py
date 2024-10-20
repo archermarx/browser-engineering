@@ -45,7 +45,7 @@ class DocumentLayout:
         self.y2 = y2
 
     def layout(self):
-        child = BlockLayout(self.node, self, None)
+        child = BlockLayout([self.node], self, None)
         self.children.append(child)
 
         self.width = self.x2 - self.x1 - 2 * HSTEP
@@ -61,8 +61,8 @@ class DocumentLayout:
         return "DocumentLayout()"
 
 class BlockLayout:
-    def __init__(self, node, parent, previous):
-        self.node = node
+    def __init__(self, nodes, parent, previous):
+        self.nodes = nodes
         self.parent = parent
         self.previous = previous
         self.children = []
@@ -77,13 +77,13 @@ class BlockLayout:
         self.pre = False
 
     def layout_mode(self):
-        if isinstance(self.node, Text):
+        if isinstance(self.nodes[0], Text):
             return "inline"
         elif any([isinstance(child, Element) and \
                   child.tag in BLOCK_ELEMENTS
-                  for child in self.node.children]):
+                  for child in self.nodes[0].children]):
             return "block"
-        elif self.node.children:
+        elif self.nodes[0].children:
             return "inline"
         else:
             return "block"
@@ -100,25 +100,50 @@ class BlockLayout:
         mode = self.layout_mode()
         if mode == "block":
             previous = None
-            for child in self.node.children:
-                if isinstance(child, Element):
-                    tag, attrs = child.tag, child.attributes
-                    if tag == "head": continue # don't include head in layout
-                    if tag == "nav" and "id" in attrs and attrs["id"] == '"toc"':
-                        # lay out table of contents -- add text right before it
-                        toc_node = Element("nav", attributes = {"id": '"toc_text"'}, parent = self.node)
-                        toc_text = Text("Table of Contents", parent = toc_node)
-                        toc_node.children.append(toc_text)
+            for node in self.nodes:
+                in_sequence = False
+                children = []
+                buf = []
+                for child in node.children:
+                    # handle anonymous blocks -- exercise 5-5
+                    # group children into lists of text-like elements and individual others
+                    # add the lists of elements to block layouts together instead of
+                    # individually in their own layouts
+                    if isinstance(child, Element) and child.tag in BLOCK_ELEMENTS:
+                        # container-like element
+                        if in_sequence:
+                            children.append(buf)
+                            buf = []
+                            in_sequence = False
+                        children.append([child])
+                    else:
+                        # text-like element or just text
+                        in_sequence = True
+                        buf.append(child)
 
-                        next = BlockLayout(toc_node, self, previous)                        
-                        self.children.append(next)
-                        previous = next
+                if buf: children.append(buf)
 
-                        next.children.append(BlockLayout(toc_text, next, None))
+                # loop over each sequence of children, lay them out together
+                for child_list in children:
+                    for child in child_list:
+                        if isinstance(child, Element):
+                            tag, attrs = child.tag, child.attributes
+                            if tag == "head": continue # don't include head in layout
+                            if tag == "nav" and "id" in attrs and attrs["id"] == '"toc"':
+                                # lay out table of contents -- add text right before it in a special container
+                                toc_node = Element("nav", attributes = {"id": '"toc_text"'}, parent = None)
+                                toc_text = Text("Table of Contents", parent = toc_node)
+                                toc_node.children.append(toc_text)
 
-                next = BlockLayout(child, self, previous)
-                self.children.append(next)
-                previous = next
+                                next = BlockLayout([toc_node], self, previous)                        
+                                self.children.append(next)
+                                previous = next
+
+                                next.children.append(BlockLayout([toc_text], next, None))
+
+                    next = BlockLayout(child_list, self, previous)
+                    self.children.append(next)
+                    previous = next
         else:
             self.cursor_x = 0
             self.cursor_y = 0
@@ -127,7 +152,8 @@ class BlockLayout:
             self.size = 12
 
             self.line = []
-            self.recurse(self.node)
+            for node in self.nodes:
+                self.recurse(node)
             self.flush()
 
         for child in self.children:
@@ -141,32 +167,32 @@ class BlockLayout:
 
     def paint(self):
         cmds = []
+        for node in self.nodes:
+            if isinstance(node, Element):
+                tag = node.tag
+                attrs = node.attributes
 
-        if isinstance(self.node, Element):
-            tag = self.node.tag
-            attrs = self.node.attributes
-
-            if tag == "pre" :
-                x2, y2 = self.x + self.width, self.y + self.height
-                rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
-                cmds.append(rect)
-
-            if tag == "nav":
-                if "class" in attrs and attrs["class"] == '"links"':
-                    # links bar
+                if tag == "pre" :
                     x2, y2 = self.x + self.width, self.y + self.height
                     rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
                     cmds.append(rect)
 
-                if "id" in attrs and attrs["id"] == '"toc_text"':
-                    # table of contents
-                    x2, y2 = self.x + self.width, self.y + self.height
-                    rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
-                    cmds.append(rect)
+                if tag == "nav":
+                    if "class" in attrs and attrs["class"] == '"links"':
+                        # links bar
+                        x2, y2 = self.x + self.width, self.y + self.height
+                        rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
+                        cmds.append(rect)
 
-        if self.layout_mode() == "inline":
-            for x, y, word, font in self.display_list:
-                cmds.append(DrawText(x, y, word, font))
+                    if "id" in attrs and attrs["id"] == '"toc_text"':
+                        # table of contents
+                        x2, y2 = self.x + self.width, self.y + self.height
+                        rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
+                        cmds.append(rect)
+
+            if self.layout_mode() == "inline":
+                for x, y, word, font in self.display_list:
+                    cmds.append(DrawText(x, y, word, font))
         return cmds
 
     def open_tag(self, tag):
