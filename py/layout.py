@@ -101,6 +101,21 @@ class BlockLayout:
         if mode == "block":
             previous = None
             for child in self.node.children:
+                if isinstance(child, Element):
+                    tag, attrs = child.tag, child.attributes
+                    if tag == "head": continue # don't include head in layout
+                    if tag == "nav" and "id" in attrs and attrs["id"] == '"toc"':
+                        # lay out table of contents -- add text right before it
+                        toc_node = Element("nav", attributes = {"id": '"toc_text"'}, parent = self.node)
+                        toc_text = Text("Table of Contents", parent = toc_node)
+                        toc_node.children.append(toc_text)
+
+                        next = BlockLayout(toc_node, self, previous)                        
+                        self.children.append(next)
+                        previous = next
+
+                        next.children.append(BlockLayout(toc_text, next, None))
+
                 next = BlockLayout(child, self, previous)
                 self.children.append(next)
                 previous = next
@@ -126,10 +141,28 @@ class BlockLayout:
 
     def paint(self):
         cmds = []
-        if isinstance(self.node, Element) and self.node.tag == "pre":
-            x2, y2 = self.x + self.width, self.y + self.height
-            rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
-            cmds.append(rect)
+
+        if isinstance(self.node, Element):
+            tag = self.node.tag
+            attrs = self.node.attributes
+
+            if tag == "pre" :
+                x2, y2 = self.x + self.width, self.y + self.height
+                rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
+                cmds.append(rect)
+
+            if tag == "nav":
+                if "class" in attrs and attrs["class"] == '"links"':
+                    # links bar
+                    x2, y2 = self.x + self.width, self.y + self.height
+                    rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
+                    cmds.append(rect)
+
+                if "id" in attrs and attrs["id"] == '"toc_text"':
+                    # table of contents
+                    x2, y2 = self.x + self.width, self.y + self.height
+                    rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
+                    cmds.append(rect)
 
         if self.layout_mode() == "inline":
             for x, y, word, font in self.display_list:

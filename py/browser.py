@@ -139,7 +139,7 @@ class Browser:
         self.draw()
 
         #print_tree(self.nodes)
-        print_tree(self.document)
+       # print_tree(self.document)
 
 if __name__ == "__main__":
     import sys
