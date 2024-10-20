@@ -5,7 +5,7 @@ import os
 from constants import *
 from url import URL
 from html import HTMLParser, print_tree
-from layout import Layout
+from layout import paint_tree, DocumentLayout 
 
 class Browser:
     def __init__(self):
@@ -27,9 +27,20 @@ class Browser:
         self.detect_platform()
         self.current_url = "about:blank"
 
+    def display_rect(self):
+        screen_width = self.canvas.width - SCROLLBAR_WIDTH - SCROLLBAR_OFFSET
+        x1 = 0
+        y1 = ADDRESSBAR_HEIGHT
+        x2 = screen_width
+        y2 = HEIGHT 
+        return x1, y1, x2, y2
+
     def update_layout(self):
-        screen_width = self.canvas.width - HSTEP - SCROLLBAR_WIDTH - SCROLLBAR_OFFSET
-        self.display_list = Layout(self.tree, screen_width).display_list
+        self.document = DocumentLayout(self.nodes, *(self.display_rect()))
+        self.document.layout()
+        self.display_list = []
+        paint_tree(self.document, self.display_list)
+        self.draw()
 
     def resize(self, e):
         self.canvas.width = e.width
@@ -99,19 +110,20 @@ class Browser:
 
         self.max_scroll = VSTEP
 
-        for (x, y, word, font) in self.display_list:
-            self.max_scroll = max(y + self.bottom_margin - self.canvas.height, self.max_scroll)
-
-        for (x, y, word, font) in self.display_list: 
-            if y > self.scroll + self.canvas.height: continue
-            if y + VSTEP < self.scroll: continue
-            self.canvas.create_text(
-                x, y - self.scroll, 
-                text=word, font = font, anchor = "nw"
+        for cmd in self.display_list:
+            self.max_scroll = max(
+                cmd.bottom + self.bottom_margin - self.canvas.height,
+                self.max_scroll
             )
+
+        for cmd in self.display_list: 
+            if cmd.top > self.scroll + self.canvas.height: continue
+            if cmd.bottom < self.scroll: continue
+            cmd.execute(self.scroll, self.canvas)
 
         self.draw_scrollbar()
         self.draw_addressbar()
+
 
     def load(self, path):
         url = URL(path)
@@ -119,12 +131,15 @@ class Browser:
         body, _, _ = url.request()
 
         if url.content_type.startswith("text/html"):
-            self.tree = HTMLParser(body).parse()
+            self.nodes = HTMLParser(body).parse()
         else:
-            self.tree = Text(body)
+            self.nodes = Text(body)
 
         self.update_layout()
         self.draw()
+
+        #print_tree(self.nodes)
+        print_tree(self.document)
 
 if __name__ == "__main__":
     import sys

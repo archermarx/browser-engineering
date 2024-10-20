@@ -48,7 +48,7 @@ class HTMLParser:
 
     def advance(self, n = 1):
         self.pos += n
-        return self.peek(n)
+        return self.peek()
 
     def starts_comment(self):
         if self.peek() == '<' and self.peek(1) == '!' and \
@@ -70,6 +70,7 @@ class HTMLParser:
         c = self.peek()
         while c != '\0':
             if self.starts_comment():
+                print("starts comment")
                 c = self.advance(2)
                 while c != '\0' and not self.ends_comment():
                     c = self.advance()
@@ -174,8 +175,6 @@ class HTMLParser:
             else:
                 break
 
-
-
 def entity(buf):
     if buf == "lt":
         return "<"
@@ -195,9 +194,10 @@ def entity(buf):
         return ""
 
 def print_tree(node, indent = 0):
-    print(" " * indent, node)
+    space = "." * indent
+    print(f"{space}{node}")
     for child in node.children:
-        print_tree(child, indent + 2)
+        print_tree(child, indent + 1)
 
 if __name__ == "__main__":
     import sys
