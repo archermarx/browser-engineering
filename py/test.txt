@@ -1,0 +1,38 @@
+<b>Bold <i>both</b> italic</i>.
+
+1. <b>
+    unfinished = [<b>]
+    unfinished_fmt = [<b>]
+    tree = <b>
+
+2. 'Bold '
+    unfinished = [<b>]
+    unfinished_fmt = [<b>]
+    tree = <b>
+           ..'Bold '
+
+3. <i>
+    unfinished = [<b> <i>]
+    unfinished_fmt = [<b> <i>]
+    tree = <b>
+           ..'Bold '
+           ....<i>
+
+4. </b> 
+    unfinished = [<b>]
+    unfinished should be [<i>]
+
+<b>Bold <i>both</i></b><i> italic</i>
+
+1. <b>
+    unfinished = [<b>]
+2. <i>
+    unfinished = [<b> <i>]
+3. </i>
+    unfinished = [<b>]
+4. </b>
+    unfinished = []
+5. <i>
+    unfinished = [<i>]
+6. </i>
+    unfinished = []
