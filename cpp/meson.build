@@ -7,7 +7,8 @@ fmt_dep = fmt.get_variable('fmt_dep')
 
 sources = [
   'src/main.cpp',
-  'src/url.cpp'
+  'src/url.cpp',
+  'src/css.cpp'
 ]
 
 executable('browser',
